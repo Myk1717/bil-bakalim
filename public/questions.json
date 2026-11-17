@@ -1,0 +1,102 @@
+[
+  {
+    "id": "k001",
+    "level": 1,
+    "cat": "Alışkanlık",
+    "q": "\"Alışkanlık 21 günde oturur\" lafı kimden çıktı?",
+    "options": ["Bir plastik cerrah", "Bir olimpiyat koçu", "Bir Nobelli psikolog", "Bir şirket CEO'su"],
+    "answer": 0,
+    "info": "Orijinal söz \"en az yaklaşık 21 gün\"dü; \"en az\" kısmı yolda kayboldu.",
+    "source": "Maltz, 1960 - Psycho-Cybernetics"
+  },
+  {
+    "id": "k002",
+    "level": 2,
+    "cat": "Para",
+    "q": "Kaybettiğin 100 TL, kazandığın 100 TL'den kaç kat daha çok acıtır?",
+    "options": ["Aynı", "~2 kat", "~5 kat", "~10 kat"],
+    "answer": 1,
+    "info": "Meta-analizde ortalama katsayı 1,955 çıktı. Yani kayıp, kazancın yaklaşık iki katı acıtıyor.",
+    "source": "Brown ve ark., 2024 - kayıptan kaçınma meta-analizi"
+  },
+  {
+    "id": "k003",
+    "level": 3,
+    "cat": "Alışkanlık",
+    "q": "Yeni alışkanlık edinirken bir gün aksatırsan ne olur?",
+    "options": ["Her şey sıfırlanır", "Şansın yarıya düşer", "Ölçülebilir bir etki yok", "21 gün ceza"],
+    "answer": 2,
+    "info": "Tek günü kaçırmak alışkanlığın oluşma şansını düşürmedi. Bırakma sebebi yapma.",
+    "source": "Lally ve ark., 2010"
+  },
+  {
+    "id": "k004",
+    "level": 4,
+    "cat": "Alışkanlık",
+    "q": "Araştırmada bir davranışın otomatikleşmesi için ortanca süre kaç gündü?",
+    "options": ["21", "42", "66", "100"],
+    "answer": 2,
+    "info": "66 gün, 39 katılımcının modellenen ortanca süresiydi.",
+    "source": "Lally ve ark., 2010"
+  },
+  {
+    "id": "k005",
+    "level": 5,
+    "cat": "Zihin",
+    "q": "Pas sayarken ortadan goril kostümlü biri geçiyor. İzleyicilerin kaçı fark etmedi?",
+    "options": ["%5", "%20", "~%46", "%80"],
+    "answer": 2,
+    "info": "Tüm koşullarda yaklaşık %46'sı gorili fark etmedi.",
+    "source": "Simons & Chabris, 1999"
+  },
+  {
+    "id": "k006",
+    "level": 6,
+    "cat": "Alışkanlık",
+    "q": "Araştırmada en hızlı alışkanlık 18 günde oturdu. En yavaşı kaç günde (modellenen)?",
+    "options": ["40", "90", "150", "254"],
+    "answer": 3,
+    "info": "Yaklaşık 14 kat fark var. Sende hangisi?",
+    "source": "Lally ve ark., 2010"
+  },
+  {
+    "id": "k007",
+    "level": 7,
+    "cat": "Zihin",
+    "q": "Goril videosu anlatılınca insanların kaçı \"ben görürdüm\" diyor?",
+    "options": ["%30", "%50", "%70", "~%90"],
+    "answer": 3,
+    "info": "Yaklaşık %90 fark edeceğini sanıyor, gerçekte yaklaşık yarısı görmüyor.",
+    "source": "Kaynak belirtilmedi - teyit edilecek"
+  },
+  {
+    "id": "k008",
+    "level": 8,
+    "cat": "Kariyer",
+    "q": "\"Tezim 34 günde biter\" diyen öğrenciler ortalama kaç günde bitirdi?",
+    "options": ["41", "49", "56", "63"],
+    "answer": 2,
+    "info": "Gerçek ortalama 55,5 gündü; yaklaşık %30'u tahmin ettiği sürede bitirdi. \"Her şey ters giderse\" tahmini bile ortalama 48,6 gündü.",
+    "source": "Buehler, Griffin & Ross, 1994"
+  },
+  {
+    "id": "k009",
+    "level": 9,
+    "cat": "Zihin",
+    "q": "Akciğer BT'sinde nodül arayan 24 radyologdan kaçı, görüntüye eklenen goril resmini fark etmedi?",
+    "options": ["4", "10", "16", "20"],
+    "answer": 3,
+    "info": "12'si tam gorilin olduğu yere bakmıştı. Bakmak ile görmek aynı şey değil.",
+    "source": "Drew ve ark., 2013"
+  },
+  {
+    "id": "k010",
+    "level": 10,
+    "cat": "Para",
+    "q": "607 tahmini toplayan meta-analize göre kayıptan kaçınma katsayısı ortalama kaç?",
+    "options": ["1,0", "1,5", "1,96", "2,25"],
+    "answer": 2,
+    "info": "2,25 meşhur ilk çalışmanın rakamıydı ve 25 yüksek lisans öğrencisine dayanıyordu.",
+    "source": "Brown ve ark., 2024"
+  }
+]
