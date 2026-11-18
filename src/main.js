@@ -234,8 +234,59 @@ function startLadder() {
   present(ladderPick(1));
 }
 
+/* ---------- soru süresi ---------- */
+let timerId = null;
+function stopTimer() {
+  clearInterval(timerId);
+  timerId = null;
+}
+function startTimer() {
+  stopTimer();
+  timerId = setInterval(tickTimer, 100);
+  tickTimer();
+}
+function tickTimer() {
+  const c = R && R.cur;
+  if (!c || c.answered) return stopTimer();
+  const total = APP.questionSeconds * 1000;
+  const left = Math.max(0, c.deadline - performance.now());
+  const bar = document.getElementById('tbar');
+  const num = document.getElementById('tnum');
+  if (bar) {
+    bar.style.transform = `scaleX(${left / total})`;
+    bar.dataset.level = left < 5000 ? 'low' : left < 10000 ? 'mid' : 'ok';
+  }
+  if (num) {
+    num.textContent = Math.ceil(left / 1000);
+    num.parentElement.classList.toggle('urgent', left < 5000);
+  }
+  if (left <= 0) timeUp();
+}
+function timeUp() {
+  const c = R.cur;
+  stopTimer();
+  const ms = Math.round(performance.now() - c.shownAt);
+  c.answered = { orig: -1, ok: false, ms, msg: 'Süre doldu ⏰', timeout: true };
+  track('cevap', {
+    mode: R.mode,
+    question_id: c.q.id,
+    correct: false,
+    selected_option: -1,
+    selected_text: '(süre doldu)',
+    time_ms: ms,
+    step: R.mode === 'merdiven' ? R.done + 1 : R.idx + 1,
+    joker: c.jokers.join(','),
+  });
+  if (R.mode === 'gunluk') {
+    R.marks.push(false);
+    store.set('dailyProgress', { date: todayStr(), idx: R.idx + 1, score: R.score, marks: R.marks });
+  } else R.over = true;
+  render();
+}
+
 function present(q) {
   R.cur = {
+    deadline: performance.now() + APP.questionSeconds * 1000,
     q,
     order: shuffle(q.options.map((_, i) => i)),
     shownAt: performance.now(),
@@ -250,6 +301,7 @@ function present(q) {
   screen = 'question';
   render();
   window.scrollTo(0, 0);
+  startTimer();
 }
 
 function answer(displayIdx) {
@@ -257,6 +309,8 @@ function answer(displayIdx) {
   if (!c || c.answered) return;
   const orig = c.order[displayIdx];
   if (orig === undefined || c.removed.has(orig)) return;
+  if (performance.now() >= c.deadline) return timeUp();
+  stopTimer();
   const ok = orig === c.q.answer;
   const ms = Math.round(performance.now() - c.shownAt);
   c.answered = { orig, ok, ms, msg: ok ? pick(GOOD) : pick(BAD) };
@@ -277,7 +331,6 @@ function answer(displayIdx) {
   } else if (ok) R.done++;
   else R.over = true;
   render();
-  requestAnimationFrame(() => document.querySelector('.fb')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 }
 
 function next() {
@@ -342,10 +395,19 @@ function finishLadder() {
 }
 
 /* ---------- ekranlar ---------- */
+const ICON = {
+  flame: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c.6 3.2-1 5-2.6 6.8C7.8 10.6 6 12.5 6 15.5A6 6 0 0 0 18 15.5c0-2.3-1-4.2-2.3-5.6-.2 1.6-1 2.7-2.2 3.3.6-3.6-.2-8-1.5-11.2Z"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" aria-hidden="true"><path stroke="currentColor" stroke-width="2.6" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>`,
+  back: `<svg viewBox="0 0 24 24" aria-hidden="true"><path stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none" d="M15 5l-7 7 7 7"/></svg>`,
+  cal: `<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="10" width="36" height="32" rx="8" fill="#fff"/><rect x="6" y="10" width="36" height="11" rx="5" fill="#ffd6e2"/><rect x="14" y="5" width="4" height="10" rx="2" fill="#fff"/><rect x="30" y="5" width="4" height="10" rx="2" fill="#fff"/><text x="24" y="37" text-anchor="middle" font-size="15" font-weight="900" fill="#ff3d77" font-family="Nunito,system-ui">5</text></svg>`,
+  ladder: `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M15 4v40M33 4v40" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/><path d="M15 12h18M15 21h18M15 30h18M15 39h18" stroke="#fff" stroke-opacity=".75" stroke-width="3.5" stroke-linecap="round"/><circle cx="38" cy="8" r="6" fill="#ffd23f"/></svg>`,
+  play: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13a1 1 0 0 0 1.5.9l10.4-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5Z"/></svg>`,
+};
+
 const topbar = (left) => `
   <header class="top">
     ${left}
-    <div class="streak" title="Günlük tur serin">🔥 <b>${streakNow()}</b></div>
+    <div class="streak" title="Günlük tur serin">${ICON.flame}<b>${streakNow()}</b></div>
   </header>`;
 const privacy = `<p class="privacy">Anonim istatistik topluyoruz, kişisel veri toplamıyoruz.</p>`;
 
@@ -357,50 +419,57 @@ function renderHome() {
   const inProgress = !playedToday && prog && prog.date === t && prog.idx > 0;
   const best = store.get('ladderBest', null);
   const s = streakNow();
+  const dailySub = playedToday
+    ? `Bugün <b>${done.score}/${done.total}</b> yaptın. Yarın yeni sorular.`
+    : inProgress
+      ? `Kaldığın yer: ${prog.idx}/${APP.dailyCount}`
+      : `${APP.dailyCount} soru · soru başı ${APP.questionSeconds} sn`;
+  const week = Array.from({ length: 7 }, (_, i) => `<span class="${i < Math.min(s, 7) ? 'on' : ''}"></span>`).join('');
   return `
-  ${topbar(`<div class="brand">${esc(APP.name)}</div>`)}
+  ${topbar(`<div class="logo"><span class="logo-q">?</span>${esc(APP.name)}</div>`)}
   <main class="home">
-    <p class="tagline">${esc(APP.tagline)}</p>
-    <button class="card card-daily ${playedToday ? 'is-done' : ''}" data-act="daily">
-      <span class="card-emoji">📅</span>
-      <span class="card-body">
-        <span class="card-title">Günlük Tur</span>
-        <span class="card-sub">${
-          playedToday
-            ? `Bugün ${done.score}/${done.total} yaptın ✓ · Sonucu gör`
-            : inProgress
-              ? `Kaldığın yerden devam: ${prog.idx}/${APP.dailyCount}`
-              : `Bugünün ${APP.dailyCount} sorusu seni bekliyor`
-        }</span>
+    <h1 class="hero">Günde ${APP.dailyCount} soru.<br><span>Bazıları seni şaşırtacak.</span></h1>
+
+    <button class="mode mode-daily ${playedToday ? 'is-done' : ''}" data-act="daily">
+      <span class="mode-art">${ICON.cal}</span>
+      <span class="mode-body">
+        <span class="mode-kicker">${playedToday ? 'Bugün tamam ✓' : 'Bugünün turu'}</span>
+        <span class="mode-title">Günlük Tur</span>
+        <span class="mode-sub">${dailySub}</span>
       </span>
+      <span class="mode-go">${playedToday ? 'Sonuç' : ICON.play}</span>
     </button>
-    <button class="card card-ladder" data-act="ladder">
-      <span class="card-emoji">🪜</span>
-      <span class="card-body">
-        <span class="card-title">Merdiven</span>
-        <span class="card-sub">10 basamak, 3 joker. Stajyerden CEO'ya.${best ? ` · En iyin: ${esc(best.title)}` : ''}</span>
+
+    <button class="mode mode-ladder" data-act="ladder">
+      <span class="mode-art">${ICON.ladder}</span>
+      <span class="mode-body">
+        <span class="mode-kicker">${best ? `En iyin: ${esc(best.title)}` : 'Stajyerden CEO’ya'}</span>
+        <span class="mode-title">Merdiven</span>
+        <span class="mode-sub">10 basamak · 3 joker · yanlışta biter</span>
       </span>
+      <span class="mode-go">${ICON.play}</span>
     </button>
+
     <div class="streak-card">
-      <span class="streak-big">🔥 ${s}</span>
-      <span>${
-        s === 0 ? 'Seri yok. Bugünkü turu bitir, seriyi başlat.' : playedToday ? `${s} günlük seri. Yarın da gel, sönmesin.` : `${s} günlük seri. Bugünkü turu bitir, devam etsin.`
-      }</span>
+      <div class="streak-num">${ICON.flame}<b>${s}</b><small>gün</small></div>
+      <div class="streak-txt">
+        <div class="week">${week}</div>
+        <p>${s === 0 ? 'Bugünkü turu bitir, seriyi başlat.' : playedToday ? 'Seri yanıyor. Yarın da gel.' : 'Bugünkü turu bitir, seri sönmesin.'}</p>
+      </div>
     </div>
   </main>
   ${privacy}`;
 }
 
 function ladderBar() {
-  // cevaplandıktan sonra da "Devam"a basılana kadar aynı basamağı göster
   const cur = R.cur.answered && R.cur.answered.ok ? R.done : R.done + 1;
   const cells = Array.from({ length: LADDER_STEPS }, (_, i) => {
     const n = i + 1;
-    const cls = [n <= R.done ? 'ok' : '', n === cur ? 'cur' : '', SAFE_STEPS.includes(n) ? 'safe' : ''].join(' ');
-    return `<span class="lad ${cls}">${SAFE_STEPS.includes(n) ? '★' : ''}</span>`;
+    const cls = [n <= R.done ? 'ok' : '', n === cur && !(R.cur.answered && R.cur.answered.ok) ? 'cur' : '', SAFE_STEPS.includes(n) ? 'safe' : ''].join(' ');
+    return `<span class="seg-step ${cls}">${n}</span>`;
   }).join('');
-  return `<div class="prog">${cells}</div>
-    <div class="meta">Basamak ${cur}/${LADDER_STEPS} · <b>${esc(STEP_TITLES[cur - 1])}</b>${SAFE_STEPS.includes(cur) ? ' · güvenli basamak' : ''}</div>`;
+  return `<div class="ladder-strip">${cells}</div>
+    <div class="qmeta"><span>Basamak ${cur}/${LADDER_STEPS}</span><span class="pill">${esc(STEP_TITLES[cur - 1])}${SAFE_STEPS.includes(cur) ? ' · güvenli' : ''}</span></div>`;
 }
 
 function renderQuestion() {
@@ -409,35 +478,43 @@ function renderQuestion() {
   const a = c.answered;
   const st = qStats(q.id);
   const anim = !c.animated;
+  const left = Math.max(0, a ? (a.timeout ? 0 : c.deadline - c.shownAt - a.ms) : c.deadline - performance.now());
 
   const progress =
     R.mode === 'gunluk'
-      ? `<div class="prog">${R.ids
-          .map((_, i) => `<span class="dot ${i < R.marks.length ? (R.marks[i] ? 'ok' : 'no') : i === R.idx ? 'cur' : ''}"></span>`)
-          .join('')}</div><div class="meta">Soru ${R.idx + 1}/${R.ids.length}</div>`
+      ? `<div class="dots">${R.ids
+          .map((_, i) => `<span class="${i < R.marks.length ? (R.marks[i] ? 'ok' : 'no') : i === R.idx ? 'cur' : ''}"></span>`)
+          .join('')}</div><div class="qmeta"><span>Soru ${R.idx + 1}/${R.ids.length}</span><span class="pill">Günlük Tur</span></div>`
       : ladderBar();
+
+  const timer = `<div class="timer ${a ? 'stopped' : ''}">
+      <div class="timer-track"><div class="timer-bar" id="tbar" style="transform:scaleX(${left / (APP.questionSeconds * 1000)})"></div></div>
+      <div class="timer-num"><span id="tnum">${a ? (a.timeout ? 0 : Math.ceil((c.deadline - c.shownAt - a.ms) / 1000)) : Math.ceil(left / 1000)}</span>sn</div>
+    </div>`;
 
   const jokers =
     R.mode === 'merdiven' && !a
       ? `<div class="jokers">
-        <button class="joker" data-act="joker" data-k="fifty" ${R.jokers.fifty ? '' : 'disabled'}>✂️ Şıkları azalt</button>
-        ${st || c.crowd ? `<button class="joker" data-act="joker" data-k="crowd" ${R.jokers.crowd ? '' : 'disabled'}>👥 Oyuncular ne dedi?</button>` : ''}
-        <button class="joker" data-act="joker" data-k="skip" ${R.jokers.skip ? '' : 'disabled'}>🃏 Kartımı kullan</button>
+        <button class="joker" data-act="joker" data-k="fifty" ${R.jokers.fifty ? '' : 'disabled'}><b>50:50</b><span>Şıkları azalt</span></button>
+        ${st || c.crowd ? `<button class="joker" data-act="joker" data-k="crowd" ${R.jokers.crowd ? '' : 'disabled'}><b>👥</b><span>Oyuncular ne dedi?</span></button>` : ''}
+        <button class="joker" data-act="joker" data-k="skip" ${R.jokers.skip ? '' : 'disabled'}><b>🃏</b><span>Kartımı kullan</span></button>
       </div>`
       : '';
 
+  let letter = 0;
   const opts = c.order
     .map((orig, di) => {
       if (c.removed.has(orig)) return '';
+      const L = 'ABCD'[letter++] || '';
       let cls = 'opt';
       if (a) {
         if (orig === q.answer) cls += ' correct' + (anim && a.ok ? ' pulse' : '');
         else if (orig === a.orig) cls += ' wrong' + (anim ? ' shake' : '');
         else cls += ' dim';
       }
-      const pct = c.crowd && st ? Math.round(((st.o && st.o[orig]) || 0) * 100 / st.n) : null;
+      const pct = c.crowd && st ? Math.round((((st.o && st.o[orig]) || 0) * 100) / st.n) : null;
       return `<button class="${cls}" data-act="answer" data-i="${di}" ${a ? 'disabled' : ''}>
-        <span class="opt-txt">${esc(q.options[orig])}</span>${pct !== null ? `<span class="pct">%${pct}</span>` : ''}
+        <span class="opt-l">${L}</span><span class="opt-txt">${esc(q.options[orig])}</span>${pct !== null ? `<span class="pct">%${pct}</span>` : ''}
       </button>`;
     })
     .join('');
@@ -445,28 +522,34 @@ function renderQuestion() {
   let fb = '';
   if (a) {
     const last = R.mode === 'gunluk' ? R.idx + 1 >= R.ids.length : R.over || R.done >= LADDER_STEPS;
-    const nextLabel = !last ? 'Sonraki soru →' : R.mode === 'merdiven' && !R.over ? 'Zirveye çık 🏆' : 'Sonucu gör →';
-    fb = `<section class="fb ${a.ok ? 'good' : 'bad'}">
-      <div class="fb-h">${esc(a.msg)}</div>
-      ${!a.ok ? `<div class="fb-ans">Doğrusu: <b>${esc(q.options[q.answer])}</b></div>` : ''}
-      ${q.info ? `<div class="info"><span>💡</span><p>${esc(q.info)}</p></div>` : ''}
-      ${st ? `<div class="know">Bunu bilenlerin oranı: <b>%${Math.round((st.c * 100) / st.n)}</b></div>` : ''}
+    const nextLabel = !last ? 'Devam' : R.mode === 'merdiven' && !R.over ? 'Zirveye çık 🏆' : 'Sonucu gör';
+    fb = `<div class="sheet-back"></div><section class="sheet ${a.ok ? 'good' : 'bad'} ${anim ? 'in' : ''}">
+      <div class="sheet-head">
+        <span class="sheet-ico">${a.ok ? '✓' : a.timeout ? '⏰' : '✕'}</span>
+        <div><div class="sheet-h">${esc(a.msg)}</div>
+        ${!a.ok ? `<div class="sheet-ans">Doğrusu: <b>${esc(q.options[q.answer])}</b></div>` : ''}</div>
+      </div>
+      ${q.info ? `<div class="info"><span class="info-tag">Bilgi kartı</span><p>${esc(q.info)}</p></div>` : ''}
+      ${st ? `<div class="know">Bunu bilenlerin oranı <b>%${Math.round((st.c * 100) / st.n)}</b></div>` : ''}
       <div class="vote" id="vote">${voteHtml(c)}</div>
-      <button class="primary" data-act="next">${nextLabel}</button>
+      <button class="cta" data-act="next">${nextLabel}</button>
     </section>`;
   }
 
   c.animated = true;
   return `
-  ${topbar(`<button class="icon-btn" data-act="exit" aria-label="Çık">✕</button>`)}
-  <main class="qscreen">
+  ${topbar(`<button class="icon-btn" data-act="exit" aria-label="Çık">${ICON.close}</button>`)}
+  <main class="qscreen ${a ? 'answered' : ''}">
     ${progress}
-    <div class="cat">${esc(q.cat || 'Genel Merak')}</div>
-    <h1 class="q">${esc(q.q)}</h1>
+    ${timer}
+    <div class="qcard">
+      <span class="cat">${esc(q.cat || 'Genel Merak')}</span>
+      <h1 class="q">${esc(q.q)}</h1>
+    </div>
     ${jokers}
     <div class="opts">${opts}</div>
-    ${fb}
-  </main>`;
+  </main>
+  ${fb}`;
 }
 
 function voteHtml(c) {
@@ -504,7 +587,7 @@ function shareBlock(text) {
   return `<div class="share">
     <pre class="share-txt">${esc(text)}</pre>
     <div class="row">
-      <button class="primary" data-act="copy">Kopyala</button>
+      <button class="cta" data-act="copy">Kopyala</button>
       ${navigator.share ? `<button class="secondary" data-act="share">Paylaş</button>` : ''}
     </div>
   </div>`;
@@ -516,16 +599,19 @@ function renderDailyResult() {
   const msg =
     res.score === res.total ? 'Kusursuz! Bugün beynin formda.' : res.score >= 3 ? 'Fena değil, hiç fena değil.' : 'Bugün sorular sinsiydi. Yarın rövanş.';
   return `
-  ${topbar(`<button class="icon-btn" data-act="home" aria-label="Ana sayfa">←</button>`)}
+  ${topbar(`<button class="icon-btn" data-act="home" aria-label="Ana sayfa">${ICON.back}</button>`)}
   <main class="result">
-    <div class="big-score">${res.score}<small>/${res.total}</small></div>
-    <div class="grid">${(res.marks || []).map((m) => (m ? '🟩' : '🟥')).join('')}</div>
-    <p class="result-msg">${msg}</p>
-    <p class="muted">🔥 ${streakNow()} günlük seri · Yarın yeni ${APP.dailyCount} soru.</p>
+    <section class="hero-card">
+      <span class="mode-kicker">Bugünün skoru</span>
+      <div class="big-score">${res.score}<small>/${res.total}</small></div>
+      <div class="marks">${(res.marks || []).map((m) => `<span class="${m ? 'ok' : 'no'}">${m ? '✓' : '✕'}</span>`).join('')}</div>
+      <p class="result-msg">${msg}</p>
+      <p class="muted">${streakNow()} günlük seri · Yarın yeni ${APP.dailyCount} soru</p>
+    </section>
     ${shareBlock(dailyShareText(res))}
     ${surveyHtml(res)}
     <div class="row">
-      <button class="secondary" data-act="ladder">🪜 Merdiveni dene</button>
+      <button class="secondary" data-act="ladder">Merdiveni dene</button>
       <button class="ghost" data-act="home">Ana sayfa</button>
     </div>
   </main>
@@ -547,17 +633,20 @@ function renderLadderResult() {
       ? 'Güvenli basamak seni tuttu, unvan cepte.'
       : 'Her CEO bir yerden başladı.';
   return `
-  ${topbar(`<button class="icon-btn" data-act="home" aria-label="Ana sayfa">←</button>`)}
+  ${topbar(`<button class="icon-btn" data-act="home" aria-label="Ana sayfa">${ICON.back}</button>`)}
   <main class="result">
-    <div class="title-emoji">${TITLE_EMOJI[res.title] || '🪜'}</div>
-    <div class="title-name">${esc(res.title)}</div>
-    <p class="result-msg">${msg}</p>
-    <p class="muted">${res.done}/${LADDER_STEPS} basamak çıktın.</p>
+    <section class="hero-card">
+      <div class="title-emoji">${TITLE_EMOJI[res.title] || '🪜'}</div>
+      <span class="mode-kicker">Unvanın</span>
+      <div class="title-name">${esc(res.title)}</div>
+      <p class="result-msg">${msg}</p>
+      <p class="muted">${res.done}/${LADDER_STEPS} basamak çıktın</p>
+    </section>
     <ol class="ladder-list">${steps}</ol>
     ${shareBlock(ladderShareText(res))}
     ${surveyHtml(res)}
     <div class="row">
-      <button class="primary" data-act="ladder">Tekrar dene</button>
+      <button class="cta" data-act="ladder">Tekrar dene</button>
       <button class="ghost" data-act="home">Ana sayfa</button>
     </div>
   </main>
@@ -565,6 +654,7 @@ function renderLadderResult() {
 }
 
 function render() {
+  if (screen !== 'question') stopTimer();
   $app.innerHTML =
     screen === 'question' && R
       ? renderQuestion()

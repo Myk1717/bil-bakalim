@@ -1,5 +1,5 @@
 // Basit çevrimdışı destek: önce ağ, olmazsa önbellek.
-const CACHE = 'bb-v1';
+const CACHE = 'bb-v2';
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './questions.json'])).catch(() => {}));
